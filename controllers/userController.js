@@ -14,17 +14,6 @@ export async function userRegistration(req,res){
         if( name && email && password && password_confirmation && tc){
             if( password === password_confirmation){
                 try {
-                    // const salt = await bcrypt.genSalt(12);
-                    // bcrypt.genSalt(12, function(err, salt) {
-                    //     bcrypt.hash(password, salt, function(err, hash) {
-                    //         if(err){
-                    //             res.send({"status":"failed","message":"password couldn't hash"});
-                    //         }
-                    //         else{
-                    //             hashPassword = hash;
-                    //         }
-                    //     });
-                    // });
                     const newUser = new UserModel({
                         name:name,
                         email:email,
@@ -32,7 +21,10 @@ export async function userRegistration(req,res){
                         tc:tc
                     });
                     await newUser.save();
-                    res.status(201).send({"status":"Successfull","message":"User has been registered."});
+                    const newSavedUser = await UserModel.findOne({email:email});
+                    // generating token
+                    const token = jwt.sign({userID:newSavedUser._id},process.env.JWT_SECRET_KEY ,{expiresIn:"5d"});
+                    res.status(201).send({"status":"Successfull","message":"User has been registered.","token":token});
                 } catch (error) {
                     console.log("Error :",error);
                     res.send({"status":"failed","message":"User couldn't register."});
@@ -55,13 +47,15 @@ export async function userLogin(req,res){
             const user = await UserModel.findOne({email:email});
             if(user){
                 if( user.password === md5(password)){
-                    res.send({"status":"success","message":"User logged."});
+                    // generating token
+                    const token = jwt.sign({userID:user._id},process.env.JWT_SECRET_KEY ,{expiresIn:"5d"});
+                    
+                    res.send({"status":"success","message":"User logged.","token":token});
 
                 }
                 else{
                     res.send({"status":"failed","message":"User email or password is not correct."});
                 }
-               
             }
             else{
                 res.send({"status":"failed","message":"User not registered"});
@@ -75,4 +69,35 @@ export async function userLogin(req,res){
         res.send({"status":"failed","message":"Unable to login."});
 
     }
+}
+export async function changeUserPassword(req,res){
+    const {password,password_confirmation} = req.body;
+    if(password && password_confirmation){
+        if(password === password_confirmation){
+            console.log("user :",req.user);
+            UserModel.findByIdAndUpdate(req.user._id,{password:md5(password)},{new: true},
+            function (err, response) {
+              // Handle any possible database errors
+              if (err) {
+                console.log("we hit an error while storing in database" + err);
+                res.json({
+                  message: 'Database Update Failure'
+                });
+              }
+            //   console.log("This is the Response: " + response);
+            });
+
+            res.send({"status":"success","message":"Password changed"});
+        }
+        else{
+            res.send({"status":"failed","message":"Password does not match"});
+        }
+    }
+    else{
+        res.send({"status":"failed","message":"All fileds are required."});
+    }
+}
+
+export async function currentUserDetails(req,res){
+    res.send({"user":req.user});
 }
